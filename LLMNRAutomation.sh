@@ -7,7 +7,6 @@ Responder_conf="/usr/share/responder/Responder.conf"
 
 # Read the LLMNRAutomation.conf file
 while IFS='=' read -r setting value; do
-    # Trim whitespace from the setting and value
     setting=$(echo "$setting" | tr -d '[:space:]')
     value=$(echo "$value" | tr -d '[:space:]')
 
@@ -17,4 +16,4 @@ while IFS='=' read -r setting value; do
     fi
 done < "$LLMNRAutomation_conf"
 
-echo "Settings updated successfully."
+
