@@ -83,10 +83,27 @@ handle_hashes() {
     done
 }
 
+# Output IP addresses and usernames to choose for cracking
+output() {
+    echo "To start cracking, specify target ip with -i and target username with -u (e.g. sudo ./LLMNRAutomation.sh -c -i 10.0.2.15 -u user1)"
+    for file in "$hashes_dir"/*/*.txt; do
+        ip=$(basename "$(dirname "$file")")
+        echo "IP: $ip"
+        awk -F:: '{print $1}' "$file"
+        echo
+    done
+}
+
 main() {
     # Extract interface from Responder config
     Interface=$(grep -oP '^Interface\s*=\s*\K.*' "$LLMNRAutomation_conf" | tr -d '[:space:]')
-    run_responder
-    handle_hashes
+
+    if [ "$1" = "-c" ]; then
+        output
+    else
+        run_responder
+        handle_hashes
+    fi
 }
-main
+
+main "$@"
