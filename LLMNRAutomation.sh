@@ -1,7 +1,11 @@
 #!/bin/bash
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+hashes_dir="$script_dir/hashes"
+log_dir="/usr/share/responder/logs"
+
 # Update settings from configuration file
-LLMNRAutomation_conf="LLMNRAutomation.conf"
+LLMNRAutomation_conf="$script_dir/LLMNRAutomation.conf"
 Responder_conf="/usr/share/responder/Responder.conf"
 
 # Function to strip leading and trailing whitespace
@@ -64,11 +68,25 @@ run_responder() {
     eval "$cmd"
 }
 
+# Hash file filtering
+handle_hashes() {
+    mkdir -p "$hashes_dir"
+
+    # Move hash files to appropriate folders
+    for file in "$log_dir"/*.txt; do
+        if [ -f "$file" ]; then
+            # Extract IP address from the file name
+            ip=$(basename "$file" | grep -oP '(?<=-)([0-9a-f.:]+)')
+            mkdir -p "$hashes_dir/$ip"
+            cp "$file" "$hashes_dir/$ip/$(basename "$file")"
+        fi
+    done
+}
+
 main() {
     # Extract interface from Responder config
     Interface=$(grep -oP '^Interface\s*=\s*\K.*' "$LLMNRAutomation_conf" | tr -d '[:space:]')
-
     run_responder
+    handle_hashes
 }
-
 main
