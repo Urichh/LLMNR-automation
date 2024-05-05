@@ -31,7 +31,7 @@ while IFS='=' read -r key value; do
     fi
 done < "$LLMNRAutomation_conf"
 
-# Function to check if a string is a valid IPv4 address for external IP flag
+# Function to check if a string is a valid IPv4 address for external IP flag and target choosing
 is_valid_ipv4() {
     local ipv4=$1
     if [[ "$ipv4" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
@@ -99,7 +99,11 @@ main() {
     Interface=$(grep -oP '^Interface\s*=\s*\K.*' "$LLMNRAutomation_conf" | tr -d '[:space:]')
 
     if [ "$1" = "-c" ]; then
-        output
+        if [ "$2" = "-i" ] && is_valid_ipv4 "$3" && [ "$4" = "-u" ]; then
+            echo "starting hashcat over $1 $2 $3 $4 $5"
+        else
+            output
+        fi
     else
         run_responder
         handle_hashes
